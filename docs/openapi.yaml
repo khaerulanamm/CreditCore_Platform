@@ -1,0 +1,271 @@
+openapi: 3.0.3
+info:
+  title: CreditCore — Enterprise Credit Scoring Mock API
+  description: |
+    Mock REST API server for the Communication Protocols (UAS) credit-scoring
+    demonstration. Every endpoint returns a standard JSON envelope with
+    correlation IDs and audit metadata. All URLs are relative to
+    `API_BASE_URL` from `.env` (default: `http://localhost:8080`).
+  version: "1.0.0"
+servers:
+  - url: "{API_BASE_URL}"
+    description: Configurable base URL (see .env → API_BASE_URL)
+    variables:
+      API_BASE_URL:
+        default: http://localhost:8080
+
+tags:
+  - name: Business API
+    description: Credit assessment domain endpoints.
+  - name: Infrastructure
+    description: Health, observability, and simulation controls.
+
+paths:
+  /api/health:
+    get:
+      tags: [Infrastructure]
+      summary: Health probe
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthEnvelope" }
+  /api/dashboard:
+    get:
+      tags: [Infrastructure]
+      summary: Live business dashboard metrics
+      responses:
+        "200":
+          {
+            description: OK,
+            content:
+              { application/json: { schema: { $ref: "#/components/schemas/DashboardEnvelope" } } },
+          }
+  /api/observability/logs:
+    get:
+      tags: [Infrastructure]
+      summary: Immutable audit trail of every API transaction
+      responses:
+        "200":
+          {
+            description: OK,
+            content:
+              { application/json: { schema: { $ref: "#/components/schemas/LogsEnvelope" } } },
+          }
+    delete:
+      tags: [Infrastructure]
+      summary: Clear all audit logs (operator use only)
+      responses:
+        "200": { description: Cleared }
+  /api/simulation:
+    get:
+      tags: [Infrastructure]
+      summary: Read current status-override + traffic-source simulation
+      responses:
+        "200": { description: OK }
+    put:
+      tags: [Infrastructure]
+      summary: Update the global status simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SimulationInput" }
+      responses:
+        "200": { description: OK }
+        "400": { description: Contract violation }
+
+  /api/assessments:
+    get:
+      tags: [Business API]
+      summary: List all assessments
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Business API]
+      summary: Create a new credit assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentInput" }
+            examples:
+              default:
+                value:
+                  accountId: "ACC-2026-0042"
+                  borrowerName: "Anam Setiawan"
+                  requestedAmount: 10000000
+                  monthlyIncome: 15000000
+                  employmentLengthMonths: 24
+                  purposeOfLoan: "Business Venture"
+                  numberOfDependents: 2
+                  slikStatus: "Kolektibilitas 1"
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentCreatedEnvelope" }
+        "400": { description: DATA_CONTRACT_VIOLATION }
+        "429": { description: RATE_LIMIT_EXCEEDED }
+
+  /api/assessments/{assessmentId}:
+    parameters:
+      - $ref: "#/components/parameters/AssessmentId"
+    get:
+      tags: [Business API]
+      summary: Fetch a single assessment
+      responses:
+        "200": { description: OK }
+        "404": { description: RESOURCE_NOT_FOUND }
+
+  /api/assessments/{assessmentId}/status:
+    parameters:
+      - $ref: "#/components/parameters/AssessmentId"
+    patch:
+      tags: [Business API]
+      summary: Update the assessment lifecycle status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [Pending, Scored, Completed, Failed]
+      responses:
+        "200": { description: OK }
+        "400": { description: DATA_CONTRACT_VIOLATION }
+        "404": { description: RESOURCE_NOT_FOUND }
+
+  /api/credit-scores/{assessmentId}:
+    parameters:
+      - $ref: "#/components/parameters/AssessmentId"
+    get:
+      tags: [Business API]
+      summary: Fetch the calculated credit score for an assessment
+      responses:
+        "200": { description: OK }
+        "404": { description: RESOURCE_NOT_FOUND }
+
+components:
+  parameters:
+    AssessmentId:
+      name: assessmentId
+      in: path
+      required: true
+      schema: { type: string, example: "ASM-2026-0042" }
+
+  schemas:
+    Envelope:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success: { type: boolean }
+        data: { nullable: true }
+        error:
+          nullable: true
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: {}
+        meta:
+          type: object
+          properties:
+            requestId: { type: string, format: uuid }
+            correlationId: { type: string, format: uuid }
+            timestamp: { type: string, format: date-time }
+            latencyMs: { type: integer }
+            path: { type: string }
+            method: { type: string }
+            source:
+              { type: string, enum: [Lovable UI, Postman, n8n Webhook, curl, Webhook, Unknown] }
+
+    HealthEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - properties:
+            data:
+              type: object
+              properties:
+                status: { type: string, example: UP }
+                service: { type: string, example: credit-scoring-engine }
+                version: { type: string }
+
+    AssessmentInput:
+      type: object
+      required:
+        [
+          accountId,
+          borrowerName,
+          requestedAmount,
+          monthlyIncome,
+          employmentLengthMonths,
+          purposeOfLoan,
+          numberOfDependents,
+          slikStatus,
+        ]
+      properties:
+        accountId: { type: string, example: "ACC-2026-0042" }
+        borrowerName: { type: string }
+        requestedAmount: { type: number }
+        monthlyIncome: { type: number }
+        employmentLengthMonths: { type: integer }
+        purposeOfLoan:
+          { type: string, enum: [Education, Business Venture, Home Renovation, Consumer Goods] }
+        numberOfDependents: { type: integer }
+        slikStatus: { type: string, example: "Kolektibilitas 1" }
+
+    AssessmentCreatedEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - properties:
+            data:
+              type: object
+              properties:
+                assessmentId: { type: string, example: "ASM-2026-0013" }
+                status: { type: string, example: Pending }
+                createdAt: { type: string, format: date-time }
+
+    DashboardEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - properties:
+            data:
+              type: object
+              properties:
+                totalAssessments: { type: integer }
+                averageCreditScore: { type: integer }
+                approvalRate: { type: integer }
+                approvedCount: { type: integer }
+                averageRequestedAmount: { type: integer }
+                averageMonthlyIncome: { type: integer }
+                highRiskAssessments: { type: integer }
+                todaysRequests: { type: integer }
+                completedCases: { type: integer }
+                recentAssessments:
+                  type: array
+                  items: { type: object }
+
+    LogsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - properties:
+            data:
+              type: object
+              properties:
+                count: { type: integer }
+                logs:
+                  type: array
+                  items: { type: object }
+
+    SimulationInput:
+      type: object
+      properties:
+        statusOverride: { type: string, enum: [none, "400", "401", "404", "429", "500", "503"] }
+        source: { type: string, enum: [Lovable UI, Postman, n8n Webhook, curl, Webhook, Unknown] }

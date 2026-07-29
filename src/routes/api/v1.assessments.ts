@@ -1,0 +1,142 @@
+import { createFileRoute } from "@tanstack/react-router";
+import {
+  beginRequest,
+  fail,
+  finish,
+  optionsResponse,
+  runSimulations,
+} from "@/lib/server/api-runtime.server";
+import {
+  createAssessment,
+  getIdempotentAssessment,
+  nextAssessmentId,
+  saveIdempotencyKey,
+} from "@/lib/server/store.server";
+import {
+  findPersistedAssessment,
+  findPersistedIdempotencyKey,
+  listPersistedAssessments,
+  nextPersistedAssessmentId,
+  persistAssessment,
+  persistIdempotencyKey,
+} from "@/lib/server/repositories/postgres.server";
+
+const ALLOWED_PURPOSES = ["Education", "Business Venture", "Home Renovation", "Consumer Goods"];
+
+function validate(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return "Payload must be a JSON object.";
+  }
+  const o = payload as Record<string, unknown>;
+  const required = [
+    "accountId",
+    "borrowerName",
+    "requestedAmount",
+    "monthlyIncome",
+    "employmentLengthMonths",
+    "purposeOfLoan",
+    "numberOfDependents",
+    "slikStatus",
+  ];
+  for (const k of required) {
+    if (o[k] === undefined || o[k] === null || o[k] === "") return `Missing required field: ${k}`;
+  }
+  for (const k of [
+    "requestedAmount",
+    "monthlyIncome",
+    "employmentLengthMonths",
+    "numberOfDependents",
+  ]) {
+    if (typeof o[k] !== "number" || Number.isNaN(o[k] as number)) {
+      return `Field "${k}" must be a number.`;
+    }
+  }
+  if (!ALLOWED_PURPOSES.includes(String(o.purposeOfLoan))) {
+    return `purposeOfLoan must be one of: ${ALLOWED_PURPOSES.join(", ")}`;
+  }
+  if ("apiVersion" in o) return 'Field "apiVersion" is not permitted.';
+  if ("metadata" in o) return 'Field "metadata" is not permitted.';
+  for (const [k, v] of Object.entries(o)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      return `Nested objects are not permitted (field: ${k}).`;
+    }
+  }
+  return null;
+}
+
+export const Route = createFileRoute("/api/v1/assessments")({
+  server: {
+    handlers: {
+      OPTIONS: async ({ request }) => optionsResponse(await beginRequest(request)),
+      GET: async ({ request }) => {
+        const ctx = await beginRequest(request);
+        const sim = runSimulations(ctx, { isBusiness: true });
+        if (sim) return sim;
+        const items = await listPersistedAssessments();
+        return finish(ctx, 200, { count: items.length, items });
+      },
+      POST: async ({ request }) => {
+        const ctx = await beginRequest(request);
+        const sim = runSimulations(ctx, { isBusiness: true });
+        if (sim) return sim;
+        const err = validate(ctx.requestBody);
+        if (err) return fail(ctx, 400, "DATA_CONTRACT_VIOLATION", err);
+        const idempotencyKey = request.headers.get("x-idempotency-key");
+        if (idempotencyKey) {
+          const persistedId = await findPersistedIdempotencyKey(idempotencyKey);
+          const cached =
+            (persistedId ? await findPersistedAssessment(persistedId) : undefined) ??
+            getIdempotentAssessment(idempotencyKey);
+          if (cached)
+            return finish(
+              ctx,
+              200,
+              {
+                assessmentId: cached.assessmentId,
+                status: cached.status,
+                createdAt: cached.createdAt,
+                resource: `/api/v1/assessments/${cached.assessmentId}`,
+                scoreResource: `/api/v1/credit-scores/${cached.assessmentId}`,
+                idempotentReplay: true,
+              },
+              { extraHeaders: { "x-idempotent-replay": "true" } },
+            );
+        }
+        const p = ctx.requestBody as {
+          accountId: string;
+          borrowerName: string;
+          requestedAmount: number;
+          monthlyIncome: number;
+          employmentLengthMonths: number;
+          purposeOfLoan: string;
+          numberOfDependents: number;
+          slikStatus: string;
+        };
+        const memoryId = nextAssessmentId();
+        const persistedId = await nextPersistedAssessmentId();
+        const assessmentId =
+          Number(memoryId.split("-").pop()) >= Number(persistedId.split("-").pop())
+            ? memoryId
+            : persistedId;
+        const a = createAssessment(p, assessmentId);
+        await persistAssessment(a);
+        if (idempotencyKey) {
+          await persistIdempotencyKey(idempotencyKey, a.assessmentId);
+          saveIdempotencyKey(idempotencyKey, a.assessmentId);
+        }
+        return finish(
+          ctx,
+          201,
+          {
+            assessmentId: a.assessmentId,
+            status: a.status,
+            createdAt: a.createdAt,
+            resource: `/api/v1/assessments/${a.assessmentId}`,
+            scoreResource: `/api/v1/credit-scores/${a.assessmentId}`,
+          },
+          { extraHeaders: { location: `/api/v1/assessments/${a.assessmentId}` } },
+        );
+      },
+    },
+  },
+});

@@ -1,0 +1,109 @@
+{
+  "name": "CreditCore Platform — Credit Assessment Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "creditcore-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-intake",
+      "name": "Webhook: Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [280, 300],
+      "webhookId": "creditcore-intake"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "API_BASE_URL",
+              "value": "={{ $env.API_BASE_URL || 'http://host.docker.internal:8080' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "Config (API_BASE_URL)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"Config (API_BASE_URL)\"].json.API_BASE_URL }}/api/assessments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "content-type", "value": "application/json" },
+            { "name": "x-client-type", "value": "n8n Webhook" },
+            {
+              "name": "x-correlation-id",
+              "value": "={{ $json.headers?.['x-correlation-id'] || $workflow.id + '-' + $itemIndex }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($node[\"Webhook: Intake\"].json.body) }}",
+        "options": { "response": { "response": { "fullResponse": true, "neverError": true } } }
+      },
+      "id": "create-assessment",
+      "name": "POST /api/assessments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $node[\"Config (API_BASE_URL)\"].json.API_BASE_URL }}/api/credit-scores/{{ $node[\"POST /api/assessments\"].json.body.data.assessmentId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "x-client-type", "value": "n8n Webhook" }]
+        },
+        "options": {}
+      },
+      "id": "get-score",
+      "name": "GET /api/credit-scores/:id",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { received: $node[\"Webhook: Intake\"].json.body, assessment: $node[\"POST /api/assessments\"].json.body?.data, score: $node[\"GET /api/credit-scores/:id\"].json?.data } }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1220, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Intake": {
+      "main": [[{ "node": "Config (API_BASE_URL)", "type": "main", "index": 0 }]]
+    },
+    "Config (API_BASE_URL)": {
+      "main": [[{ "node": "POST /api/assessments", "type": "main", "index": 0 }]]
+    },
+    "POST /api/assessments": {
+      "main": [[{ "node": "GET /api/credit-scores/:id", "type": "main", "index": 0 }]]
+    },
+    "GET /api/credit-scores/:id": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "meta": {
+    "description": "Receives a borrower payload via webhook, forwards it to the CreditCore mock API, retrieves the calculated credit score, and returns the merged result. Configure API_BASE_URL as an n8n environment variable (or edit the Config node) — no other node hardcodes the base URL."
+  }
+}

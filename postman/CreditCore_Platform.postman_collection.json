@@ -1,0 +1,489 @@
+{
+  "info": {
+    "name": "CreditCore Platform — Business & Infrastructure API",
+    "_postman_id": "b747b110-0ec0-41ff-9292-234a2f94ade0",
+    "description": "CreditCore Platform pre-deployment verification collection. One collection covers Business API and Infrastructure API on the versioned /api/v1 contract.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "assessmentId",
+      "value": "ASM-2026-0001"
+    },
+    {
+      "key": "accountId",
+      "value": "ACC-2026-0001"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "cc-postman-demo-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Infrastructure API — Health & Dashboard",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dashboard Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/dashboard"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Business API — Assessment Lifecycle",
+      "item": [
+        {
+          "name": "List Assessments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/assessments"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create - Approved Candidate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Type",
+                "value": "Postman"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"ACC-PORT-0001\",\n  \"borrowerName\": \"Portfolio Demo\",\n  \"requestedAmount\": 10000000,\n  \"monthlyIncome\": 50000000,\n  \"employmentLengthMonths\": 60,\n  \"purposeOfLoan\": \"Business Venture\",\n  \"numberOfDependents\": 0,\n  \"slikStatus\": \"Kolektibilitas 1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Created\",()=>pm.response.to.have.status(201));",
+                  "const j=pm.response.json(); if(j.data && j.data.assessmentId){pm.collectionVariables.set(\"assessmentId\",j.data.assessmentId);}",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Assessment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/assessments/{{assessmentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Credit Score",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/credit-scores/{{assessmentId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Manual Review → Approved",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments/{{assessmentId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Manual Review → Rejected",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments/{{assessmentId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJECTED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Business API — Scoring Decision Cases",
+      "item": [
+        {
+          "name": "Approved Case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "approve-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"ACC-APPROVE\",\n  \"borrowerName\": \"Approved Demo\",\n  \"requestedAmount\": 5000000,\n  \"monthlyIncome\": 50000000,\n  \"employmentLengthMonths\": 60,\n  \"purposeOfLoan\": \"Education\",\n  \"numberOfDependents\": 0,\n  \"slikStatus\": \"Kolektibilitas 1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Decision APPROVED\",()=>pm.expect(pm.response.json().data.score.decision).to.eql(\"APPROVED\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Manual Review Case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "review-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"ACC-REVIEW\",\n  \"borrowerName\": \"Review Demo\",\n  \"requestedAmount\": 8000000,\n  \"monthlyIncome\": 20000000,\n  \"employmentLengthMonths\": 24,\n  \"purposeOfLoan\": \"Business Venture\",\n  \"numberOfDependents\": 2,\n  \"slikStatus\": \"Kolektibilitas 1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Decision MANUAL_REVIEW\",()=>pm.expect(pm.response.json().data.score.decision).to.eql(\"MANUAL_REVIEW\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hard Gate Rejected Case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "reject-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"ACC-REJECT\",\n  \"borrowerName\": \"Rejected Demo\",\n  \"requestedAmount\": 5000000,\n  \"monthlyIncome\": 50000000,\n  \"employmentLengthMonths\": 60,\n  \"purposeOfLoan\": \"Consumer Goods\",\n  \"numberOfDependents\": 0,\n  \"slikStatus\": \"Kolektibilitas 3\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const d=pm.response.json().data.score; pm.test(\"Hard gate rejected\",()=>{pm.expect(d.creditScore).to.eql(300);pm.expect(d.decision).to.eql(\"REJECTED\");pm.expect(d.reasonCode).to.eql(\"RC-OJK-COL3-5\");});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Infrastructure API — Reliability & Observability",
+      "item": [
+        {
+          "name": "Observability Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/observability/logs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Simulation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/simulation"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"200 OK\",()=>pm.response.to.have.status(200));",
+                  "pm.test(\"Response has Request/Correlation IDs\", function () { const j=pm.response.json(); pm.expect(j.meta.requestId).to.exist; pm.expect(j.meta.correlationId).to.exist; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enable 429 Simulation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statusOverride\": \"429\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Simulation configured\",()=>pm.expect(pm.response.code).to.be.oneOf([200,429]));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Disable Simulation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statusOverride\": \"none\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Simulation disabled\",()=>pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Cross-Cutting — Error Contract",
+      "item": [
+        {
+          "name": "404 Resource Not Found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/assessments/ASM-NOT-FOUND"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"404\",()=>pm.response.to.have.status(404));",
+                  "const j=pm.response.json(); pm.test(\"Standard error envelope\",()=>{pm.expect(j.success).to.eql(false);pm.expect(j.error.code).to.exist;pm.expect(j.meta.correlationId).to.exist;});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 Invalid Assessment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/assessments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"400\",()=>pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
