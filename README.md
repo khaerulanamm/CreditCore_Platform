@@ -229,3 +229,4 @@ Only after these checks pass should the release be tagged as deployment-ready.
 ---
 
 **CreditCore is a portfolio engineering project using simulated lending data and deterministic policy rules. It is not a production banking system or a deployed credit-risk model.**
+
